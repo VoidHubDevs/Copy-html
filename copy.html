@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Modern File Viewer — Vercel Ready</title>
+
+  <!-- Fonts & Prism (syntax highlight + line numbers plugin) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet"/>
+
+  <style>
+    :root{
+      --bg:#0c0d12; --panel:#0b0b0f; --glass:rgba(255,255,255,0.02);
+      --muted:#9aa0b4; --accent:#7b61ff; --radius:12px; --shadow: 0 10px 30px rgba(2,6,23,0.6);
+      --maxw:1180px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;padding:28px;background:linear-gradient(180deg,#05050a,#0d0e14);
+      color:#e6eef8;font-family:Inter,system-ui,Arial;display:flex;justify-content:center;
+    }
+    .wrap{width:100%;max-width:var(--maxw)}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    header h1{font-size:18px;margin:0;font-weight:700}
+    header p{margin:0;color:var(--muted);font-size:13px}
+
+    .layout{display:grid;grid-template-columns:300px 1fr;gap:18px}
+    @media (max-width:920px){ .layout{grid-template-columns:1fr} .left{order:2} .right{order:1} }
+
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:14px; border-radius:var(--radius); box-shadow:var(--shadow);}
+    .left .drop{border:1px dashed rgba(255,255,255,0.04); padding:12px; border-radius:10px; background:var(--glass)}
+    .drop.dragover{border-color:rgba(123,97,255,0.45); box-shadow:0 12px 40px rgba(123,97,255,0.06)}
+
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;border:none;background:linear-gradient(90deg,var(--accent),#5e45ff);color:white;font-weight:600;cursor:pointer}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+    .small{font-size:13px;color:var(--muted)}
+    .muted{color:var(--muted)}
+
+    .meta{font-size:13px;color:var(--muted);margin-top:8px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+
+    .right{min-height:480px;display:flex;flex-direction:column;gap:12px}
+    .preview-area{flex:1;border-radius:12px;overflow:hidden;background:#05050a;display:flex;align-items:flex-start;justify-content:center;padding:12px;position:relative}
+    .preview-inner{width:100%;height:100%;display:flex;flex-direction:column;gap:12px}
+    .placeholder{color:var(--muted);text-align:center;padding:18px}
+
+    textarea#textView{width:100%;height:100%;border:0;background:transparent;color:inherit;outline:none;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace;font-size:13px;resize:none}
+    pre.code{max-height:100%;overflow:auto;margin:0;width:100%;padding:12px;border-radius:8px;background:transparent}
+    .hex{font-family:ui-monospace,monospace;font-size:12px;white-space:pre;overflow:auto;padding:12px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent)}
+
+    .fileinfo{display:flex;gap:12px;align-items:center}
+    .file-icon{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#1b1637,#111);display:flex;align-items:center;justify-content:center;font-weight:700}
+
+    .history-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto;padding-right:6px}
+    .history-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;background:rgba(255,255,255,0.01);cursor:pointer;border:1px solid transparent}
+    .history-item:hover{border-color:rgba(255,255,255,0.03)}
+    .history-meta{font-size:13px;color:var(--muted)}
+    .actions{display:flex;gap:8px;align-items:center}
+
+    footer{margin-top:12px;color:var(--muted);font-size:13px;text-align:center}
+    .tag{font-size:12px;color:var(--muted);padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.02)}
+    .pill{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.02);font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Modern File Viewer</h1>
+        <p class="small">Drag & drop, previews, code line-numbers, full hex viewer, and local history — Vercel-ready.</p>
+      </div>
+      <div class="small">Static • Fast • No backend</div>
+    </header>
+
+    <div class="layout">
+      <!-- LEFT: Controls + History -->
+      <div class="left card">
+        <div id="dropZone" class="drop">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <strong>Select a file</strong>
+            <div class="controls">
+              <label class="btn ghost" for="fileInput">Choose</label>
+              <button id="clearBtn" class="btn ghost">Clear</button>
+            </div>
+          </div>
+
+          <input id="fileInput" type="file" style="display:none" />
+
+          <div id="dropHint" class="small" style="margin-top:10px">Or drag & drop a file here (images, audio, video, pdf, text, code).</div>
+
+          <div class="meta" id="meta">No file selected</div>
+
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+            <button id="copyBtn" class="btn" title="Copy visible text">Copy</button>
+            <button id="downloadBtn" class="btn ghost" title="Download original file">Download</button>
+            <button id="wrapBtn" class="btn ghost">Toggle Wrap</button>
+            <button id="hexBtn" class="btn ghost">Hex View</button>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+            <div class="pill" id="fileSize">0 bytes</div>
+            <div class="tag" id="fileType">—</div>
+          </div>
+
+          <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">
+            <div class="small muted">Recent files</div>
+            <div style="display:flex;gap:8px">
+              <button id="openHistoryBtn" class="btn ghost">Open</button>
+              <button id="clearHistoryBtn" class="btn ghost">Clear</button>
+            </div>
+          </div>
+
+          <div id="history" class="history-list" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Preview -->
+      <div class="right card">
+        <div class="toolbar fileinfo" style="justify-content:space-between">
+          <div style="display:flex;gap:12px;align-items:center">
+            <div id="fileIcon" class="file-icon">?</div>
+            <div>
+              <div id="fileName" style="font-weight:600">No file</div>
+              <div id="fileTypeLabel" class="small muted">—</div>
+            </div>
+          </div>
+          <div class="actions small muted">
+            <div id="fileModified">—</div>
+          </div>
+        </div>
+
+        <div id="previewArea" class="preview-area">
+          <div class="preview-inner" id="previewInner">
+            <div id="placeholder" class="placeholder">Drop a file to preview its contents here.</div>
+
+            <div id="extra" style="display:none">
+              <div id="hexView" class="hex" style="display:none"></div>
+              <pre id="codeView" class="code language-none line-numbers" style="display:none"><code id="codeBlock" class="language-none"></code></pre>
+              <textarea id="textView" style="display:none"></textarea>
+              <div id="mediaWrap" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="small muted">Preview engine · Prism.js for code (line numbers enabled)</div>
+          <div style="display:flex;gap:8px">
+            <button id="restoreBtn" class="btn ghost">Restore Last (if saved)</button>
+            <button id="resetViewBtn" class="btn ghost">Reset View</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>Want branding or a Next.js + Tailwind port? I can generate that next.</footer>
+  </div>
+
+  <!-- Prism core + plugin -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+
+  <script>
+    // ---------- Helpers ----------
+    const $ = (id) => document.getElementById(id);
+    const humanFileSize = size => {
+      if (!size) return '0 bytes';
+      const i = Math.floor(Math.log(size) / Math.log(1024));
+      return (size / Math.pow(1024, i)).toFixed(2).replace(/\.00$/, '') + ' ' + ['bytes','KB','MB','GB','TB'][i];
+    };
+
+    const extToLang = (name) => {
+      const ext = (name.split('.').pop() || '').toLowerCase();
+      const map = { js:'javascript', mjs:'javascript', ts:'typescript', py:'python', rb:'ruby', java:'java', html:'markup', htm:'markup', css:'css', json:'json', xml:'markup', md:'markdown', sh:'bash', bash:'bash', sql:'sql', c:'c', cpp:'cpp', cs:'csharp', go:'go', rs:'rust' };
+      return map[ext] || 'none';
+    };
+
+    // ---------- DOM ----------
+    const fileInput = $('fileInput');
+    const dropZone = $('dropZone');
+    const previewInner = $('previewInner');
+    const placeholder = $('placeholder');
+    const fileNameEl = $('fileName');
+    const fileTypeLabel = $('fileTypeLabel');
+    const fileSizeEl = $('fileSize');
+    const metaEl = $('meta');
+    const fileIcon = $('fileIcon');
+    const fileTypeTag = $('fileType');
+    const fileModified = $('fileModified');
+
+    const copyBtn = $('copyBtn');
+    const downloadBtn = $('downloadBtn');
+    const clearBtn = $('clearBtn');
+    const wrapBtn = $('wrapBtn');
+    const hexBtn = $('hexBtn');
+    const resetViewBtn = $('resetViewBtn');
+    const restoreBtn = $('restoreBtn');
+
+    const historyEl = $('history');
+    const openHistoryBtn = $('openHistoryBtn');
+    const clearHistoryBtn = $('clearHistoryBtn');
+
+    const codeView = $('codeView');
+    const codeBlock = $('codeBlock');
+    const textView = $('textView');
+    const hexView = $('hexView');
+    const extra = $('extra');
+    const mediaWrap = $('mediaWrap');
+    const downloadLink = $('downloadBtn');
+
+    // ---------- State ----------
+    let currentFile = null;
+    let currentObjectURL = null;
+    let wrapOn = true;
+    let hexShown = false;
+    const HISTORY_KEY = 'mfv_history_v1';
+    const MAX_SNAPSHOT_BYTES = 150 * 1024; // 150KB
+
+    // ---------- Utility: History ----------
+    function loadHistory() {
+      try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch(e) { return []; }
+    }
+    function saveHistory(arr) {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(arr.slice(0, 50))); // keep last 50
+    }
+    function pushHistory(entry) {
+      const arr = loadHistory();
+      // remove duplicates by id/name+size
+      const id = entry.id || (entry.name + '|' + entry.size + '|' + entry.type);
+      entry.id = id; entry.ts = Date.now();
+      const filtered = arr.filter(i => i.id !== id);
+      filtered.unshift(entry);
+      saveHistory(filtered);
+      renderHistory();
+    }
+    function clearHistory() {
+      localStorage.removeItem(HISTORY_KEY);
+      renderHistory();
+    }
+    function renderHistory() {
+      const arr = loadHistory();
+      historyEl.innerHTML = '';
+      if (!arr.length) {
+        historyEl.innerHTML = '<div class="muted small">No recent files saved in this browser.</div>';
+        return;
+      }
+      arr.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'history-item';
+        el.title = item.name;
+        el.innerHTML = `<div style="display:flex;gap:10px;align-items:center">
+                          <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.02);display:flex;align-items:center;justify-content:center">${(item.name||'?')[0].toUpperCase()}</div>
+                          <div>
+                            <div style="font-weight:600">${item.name}</div>
+                            <div class="history-meta">${humanFileSize(item.size)} · ${item.type || '—'}</div>
+                          </div>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center">
+                          <button class="btn ghost" data-id="${item.id}" title="Open">Open</button>
+                        </div>`;
+        const btn = el.querySelector('button');
+        btn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          restoreHistoryItem(item);
+        });
+        el.addEventListener('click', () => restoreHistoryItem(item));
+        historyEl.appendChild(el);
+      });
+    }
+
+    // ---------- File handling ----------
+    dropZone.addEventListener('dragenter', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); });
+    ['dragleave','drop'].forEach(ev => {
+      dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+    });
+    dropZone.addEventListener('drop', e => {
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) handleFile(f);
+    });
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+    });
+
+    clearBtn.addEventListener('click', clearAll);
+    wrapBtn.addEventListener('click', () => {
+      wrapOn = !wrapOn;
+      updateWrap();
+    });
+    hexBtn.addEventListener('click', () => {
+      if (!currentFile) return alert('Open a file first');
+      hexShown = !hexShown;
+      if (hexShown) showHexFull(); else hideHex();
+    });
+    copyBtn.addEventListener('click', async () => {
+      try {
+        if (textView.style.display !== 'none') await navigator.clipboard.writeText(textView.value);
+        else if (codeView.style.display !== 'none') await navigator.clipboard.writeText(codeBlock.innerText);
+        else if (hexView.style.display !== 'none') await navigator.clipboard.writeText(hexView.innerText);
+        else alert('No textual preview to copy');
+        if (!navigator.clipboard) alert('Copied (fallback may not be available)');
+        else alert('Copied to clipboard');
+      } catch(e){ alert('Copy failed: '+(e.message||e)); }
+    });
+    downloadBtn.addEventListener('click', () => {
+      if (!currentFile) return alert('No file to download');
+      const url = currentObjectURL || URL.createObjectURL(currentFile);
+      const a = document.createElement('a'); a.href = url; a.download = currentFile.name || 'download'; document.body.appendChild(a); a.click(); a.remove();
+      if (!currentObjectURL) URL.revokeObjectURL(url);
+    });
+    resetViewBtn.addEventListener('click', resetView);
+    restoreBtn.addEventListener('click', () => {
+      const arr = loadHistory();
+      if (!arr.length) return alert('No saved snapshots in history');
+      restoreHistoryItem(arr[0]);
+    });
+    openHistoryBtn.addEventListener('click', () => {
+      // just focus the history area
+      historyEl.scrollIntoView({behavior:'smooth'});
+    });
+    clearHistoryBtn.addEventListener('click', () => {
+      if (!confirm('Clear recent files stored locally?')) return;
+      clearHistory();
+    });
+
+    function clearAll() {
+      currentFile = null;
+      if (currentObjectURL) URL.revokeObjectURL(currentObjectURL);
+      currentObjectURL = null;
+      fileIcon.textContent = '?';
+      fileNameEl.textContent = 'No file';
+      fileTypeLabel.textContent = '—';
+      fileSizeEl.textContent = '0 bytes';
+      metaEl.textContent = 'No file selected';
+      fileModified.textContent = '—';
+      placeholder.style.display = 'block';
+      extra.style.display = 'none';
+      mediaWrap.style.display = 'none';
+      mediaWrap.innerHTML = '';
+      codeView.style.display = 'none';
+      textView.style.display = 'none';
+      hexView.style.display = 'none';
+    }
+
+    function resetView() {
+      extra.style.display = 'none';
+      codeView.style.display = 'none';
+      textView.style.display = 'none';
+      hexView.style.display = 'none';
+      mediaWrap.style.display = 'none';
+      mediaWrap.innerHTML = '';
+      placeholder.style.display = 'block';
+      hexShown = false;
+    }
+
+    async function handleFile(f) {
+      try {
+        clearAll();
+        currentFile = f;
+        placeholder.style.display = 'none';
+        extra.style.display = 'block';
+        fileNameEl.textContent = f.name || 'unknown';
+        fileTypeLabel.textContent = f.type || '—';
+        fileSizeEl.textContent = humanFileSize(f.size);
+        metaEl.textContent = `Selected: ${f.name} — ${humanFileSize(f.size)} — ${f.type || '—'}`;
+        fileIcon.textContent = (f.name && f.name[0].toUpperCase()) || '?';
+        fileModified.textContent = f.lastModified ? new Date(f.lastModified).toLocaleString() : '—';
+
+        // objectURL for media preview
+        try { currentObjectURL = URL.createObjectURL(f); } catch(e) { currentObjectURL = null; }
+
+        // Quick branch
+        if (f.type.startsWith('image/')) {
+          showImage(currentObjectURL);
+        } else if (f.type.startsWith('video/')) {
+          showVideo(currentObjectURL);
+        } else if (f.type.startsWith('audio/')) {
+          showAudio(currentObjectURL);
+        } else if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
+          showPDF(currentObjectURL);
+        } else {
+          // try read as text for common textual extensions or types
+          const textFriendly = f.type.startsWith('text/') || ['application/json','application/javascript','application/xml'].includes(f.type) || /\.(js|ts|py|json|html|css|md|xml|sh|rb|java|c|cpp|cs|go|rs|sql)$/i.test(f.name);
+          if (textFriendly) {
+            const txt = await f.text();
+            showText(txt, f.name);
+            saveSnapshotIfPossible(f, { snapshotType: 'text', text: txt });
+          } else {
+            // binary fallback: read as arrayBuffer, attempt to decode UTF-8 small text, else show hex + maybe image/audio via objectURL
+            const ab = await f.arrayBuffer();
+            const decoded = tryDecodeText(ab);
+            if (decoded !== null && decoded.length > 0 && decoded.length < 200000) {
+              showText(decoded, f.name);
+              saveSnapshotIfPossible(f, { snapshotType: 'text', text: decoded });
+            } else {
+              showBinaryPreview(ab, f.name);
+              // For small binaries, save dataURL snapshot for restore
+              if (f.size <= MAX_SNAPSHOT_BYTES) {
+                const dataUrl = await fileToDataURL(f);
+                saveSnapshotIfPossible(f, { snapshotType: 'dataURL', dataUrl });
+              } else {
+                saveSnapshotIfPossible(f, { snapshotType: 'none' });
+              }
+            }
+          }
+        }
+
+        // Add metadata to history (always store metadata; snapshot maybe included above)
+        const histEntry = {
+          id: `${f.name}|${f.size}|${f.type}|${f.lastModified || 0}`,
+          name: f.name, size: f.size, type: f.type,
+          lastModified: f.lastModified || null,
+          saved: true // snapshot decision handled separately
+        };
+        pushHistory(histEntry);
+      } catch (err) {
+        console.error(err);
+        alert('Error opening file: ' + (err.message || err));
+      }
+    }
+
+    function showImage(url) {
+      resetView();
+      const img = document.createElement('img'); img.src = url; img.className = 'dyn'; img.style.maxWidth='100%'; img.style.maxHeight='100%';
+      mediaWrap.style.display = 'block'; mediaWrap.innerHTML = ''; mediaWrap.appendChild(img);
+      extra.style.display = 'block'; mediaWrap.style.display = 'block';
+    }
+    function showVideo(url) {
+      resetView();
+      const v = document.createElement('video'); v.controls=true; v.src=url; v.style.maxWidth='100%'; v.style.maxHeight='100%';
+      mediaWrap.style.display = 'block'; mediaWrap.innerHTML = ''; mediaWrap.appendChild(v);
+      extra.style.display = 'block';
+    }
+    function showAudio(url) {
+      resetView();
+      const a = document.createElement('audio'); a.controls=true; a.src=url; mediaWrap.style.display = 'block'; mediaWrap.innerHTML = ''; mediaWrap.appendChild(a); extra.style.display = 'block';
+    }
+    function showPDF(url) {
+      resetView();
+      const embed = document.createElement('embed'); embed.src = url; embed.type = 'application/pdf'; embed.style.width='100%'; embed.style.height='100%';
+      mediaWrap.style.display = 'block'; mediaWrap.innerHTML = ''; mediaWrap.appendChild(embed); extra.style.display = 'block';
+    }
+
+    function showText(txt, name) {
+      resetView();
+      const lang = extToLang(name || '');
+      if (lang !== 'none') {
+        codeBlock.className = 'language-' + lang;
+        codeBlock.textContent = txt;
+        codeView.style.display = 'block';
+        extra.style.display = 'block';
+        requestAnimationFrame(() => Prism.highlightElement(codeBlock));
+      } else {
+        textView.style.display = 'block';
+        textView.value = txt;
+        textView.style.whiteSpace = wrapOn ? 'pre-wrap' : 'pre';
+        extra.style.display = 'block';
+      }
+    }
+
+    function showBinaryPreview(ab, name) {
+      resetView();
+      // attempt to show hex (partial) + allow full hex toggle via hex button
+      const bytes = new Uint8Array(ab);
+      const snippet = bytes.slice(0, 512);
+      hexView.style.display = 'block';
+      hexView.textContent = buildHex(snippet) + (bytes.length > snippet.length ? '\n... (truncated — click Hex View to show more)' : '');
+      extra.style.display = 'block';
+      mediaWrap.style.display = 'none';
+    }
+
+    function hideHex() {
+      hexView.style.display = 'none';
+      // leave other preview as is
+    }
+
+    async function showHexFull() {
+      resetView(); extra.style.display = 'block'; hexView.style.display = 'block';
+      // If we have objectURL and file, read blob in chunks (but File is available)
+      if (!currentFile) return hexView.textContent = 'No file';
+      try {
+        const size = currentFile.size;
+        if (size > 5000000) { // 5MB safety cutoff
+          // for very large files, ask user to confirm
+          if (!confirm('File is large ('+humanFileSize(size)+'). Full hex rendering may be slow and might freeze the tab. Show first 1MB instead?')) {
+            // user canceled full; show first 1MB
+            const ab = await currentFile.slice(0, 1024*1024).arrayBuffer();
+            hexView.textContent = buildHex(new Uint8Array(ab)) + '\n... (truncated)';
+            return;
+          }
+        }
+        // read full (or up to a cap)
+        const cap = Math.min(size, 2 * 1024 * 1024); // cap to 2MB always to protect browser
+        const ab = await currentFile.slice(0, cap).arrayBuffer();
+        hexView.textContent = buildHex(new Uint8Array(ab)) + (cap < size ? '\n... (truncated to '+humanFileSize(cap)+')' : '');
+      } catch (e) {
+        console.error(e);
+        hexView.textContent = 'Failed to read file for hex: ' + (e.message || e);
+      }
+    }
+
+    function tryDecodeText(ab) {
+      try {
+        const dec = new TextDecoder('utf-8', { fatal:false }).decode(ab);
+        // Heuristic: if many replacement characters, treat as binary
+        const replacements = (dec.match(/\uFFFD/g) || []).length;
+        if (replacements > 10 && ab.byteLength > 200) return null;
+        return dec;
+      } catch(e){ return null; }
+    }
+    function buildHex(u8) {
+      let out = '';
+      for (let i=0;i<u8.length;i+=16) {
+        const slice = u8.subarray(i, i+16);
+        const addr = i.toString(16).padStart(8,'0');
+        const hexs = Array.from(slice).map(b => b.toString(16).padStart(2,'0')).join(' ');
+        const ascii = Array.from(slice).map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+        out += `${addr}  ${hexs.padEnd(16*3-1,' ')}  ${ascii}\n`;
+      }
+      return out;
+    }
+
+    function updateWrap() {
+      if (textView.style.display !== 'none') textView.style.whiteSpace = wrapOn ? 'pre-wrap' : 'pre';
+      if (codeView.style.display !== 'none') {
+        // Prism's line-numbers will still work; the pre element will wrap depending on white-space on code element
+        // We toggle white-space via style
+        codeBlock.style.whiteSpace = wrapOn ? 'pre-wrap' : 'pre';
+      }
+    }
+
+    function fileToDataURL(file) {
+      return new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+    }
+
+    function saveSnapshotIfPossible(file, snapshotObj) {
+      // We store metadata + snapshot for small files; snapshotObj = {snapshotType:'text'|'dataURL'|'none', text?, dataUrl?}
+      // To avoid duplication: read history array and update matching entry with snapshot
+      try {
+        const arr = loadHistory();
+        const id = `${file.name}|${file.size}|${file.type}|${file.lastModified || 0}`;
+        const idx = arr.findIndex(i => i.id === id);
+        const entry = idx >= 0 ? arr[idx] : { id, name: file.name, size: file.size, type: file.type, lastModified: file.lastModified || null };
+        entry.snapshotType = snapshotObj.snapshotType || 'none';
+        if (snapshotObj.snapshotType === 'text') entry.text = snapshotObj.text;
+        if (snapshotObj.snapshotType === 'dataURL') entry.dataUrl = snapshotObj.dataUrl;
+        // put to top
+        const filtered = arr.filter(i => i.id !== id);
+        filtered.unshift(entry);
+        saveHistory(filtered);
+        renderHistory();
+      } catch(e) { console.warn('Could not save snapshot', e); }
+    }
+
+    async function restoreHistoryItem(item) {
+      // If item has text or dataUrl snapshot, reconstruct Blob and open it.
+      if (item.text) {
+        const blob = new Blob([item.text], { type: item.type || 'text/plain' });
+        handleFile(new File([blob], item.name, { type: item.type || 'text/plain', lastModified: item.lastModified || Date.now() }));
+        return;
+      }
+      if (item.dataUrl) {
+        // convert dataURL to blob
+        const res = await fetch(item.dataUrl);
+        const ab = await res.arrayBuffer();
+        const blob = new Blob([ab], { type: item.type || '' });
+        handleFile(new File([blob], item.name, { type: item.type || '', lastModified: item.lastModified || Date.now() }));
+        return;
+      }
+      alert('No snapshot available for this file in your browser. You can still re-upload the file to preview it.');
+    }
+
+    // initial render
+    renderHistory();
+    clearAll();
+
+    // Accessibility & small UX: allow keyboard open file via label
+    document.querySelector('label[for="fileInput"]').addEventListener('click', () => fileInput.click());
+
+    // Make sure to revoke objectURL on page unload
+    window.addEventListener('beforeunload', () => { if (currentObjectURL) URL.revokeObjectURL(currentObjectURL); });
+
+    // Prevent accidental errors on older browsers lacking Clipboard API
+    if (!navigator.clipboard) copyBtn.title = 'Clipboard API not available in this browser';
+
+  </script>
+</body>
+</html>
